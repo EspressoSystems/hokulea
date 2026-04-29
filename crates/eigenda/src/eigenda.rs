@@ -67,13 +67,18 @@ where
         &mut self,
         block_ref: &BlockInfo,
         batcher_addr: Address,
+        l2_block_time: u64,
     ) -> PipelineResult<Self::Item> {
         debug!("Data Available Source next {} {}", block_ref, batcher_addr);
         // if there is no data, fetch one from ethereum source.
         // the fetched data can either be an altda commitment which can be used to retrieve from eigenda source
         // or a ethereum blob or calldata
         if self.altda_commitment.is_none() {
-            let local_data = match self.ethereum_source.next(block_ref, batcher_addr).await {
+            let local_data = match self
+                .ethereum_source
+                .next(block_ref, batcher_addr, l2_block_time)
+                .await
+            {
                 Ok(d) => d,
                 Err(e) => {
                     // if ethereum source for that block exhausted, reset the ethereum source and itself
@@ -135,7 +140,7 @@ where
                         e
                     );
                     self.altda_commitment = None;
-                    return self.next(block_ref, batcher_addr).await;
+                    return self.next(block_ref, batcher_addr, l2_block_time).await;
                 }
                 HokuleaErrorKind::Critical(e) => {
                     error!("Hokulea derivation critical: {}", e);
@@ -154,7 +159,7 @@ where
                         // EigenLabs branch https://github.com/Layr-Labs/optimism/blob/34e5ce8416de529b8a57b0c55e1635ebe89805dc/op-node/rollup/derive/altda_data_source.go#L103
                         warn!("Hokulea derivation discards due to decoding error: {}", e);
                         self.altda_commitment = None;
-                        return self.next(block_ref, batcher_addr).await;
+                        return self.next(block_ref, batcher_addr, l2_block_time).await;
                     }
                 }
             }
@@ -425,7 +430,7 @@ mod tests {
         // which maps to temporary error
         // https://github.com/op-rs/kona/blob/a7446de410a1c40597d44a7f961e46bbbf0576bc/crates/protocol/derive/src/errors/sources.rs#L49
         assert!(matches!(
-            source.next(&BlockInfo::default(), Address::ZERO).await,
+            source.next(&BlockInfo::default(), Address::ZERO, 0).await,
             Err(PipelineErrorKind::Temporary(_)),
         ));
     }
@@ -447,7 +452,7 @@ mod tests {
         // and next_data will return EOF
         // https://github.com/Layr-Labs/kona/blob/fa982a0d2406ed2bbca0682d958a6cd087db4ed7/crates/protocol/derive/src/sources/blobs.rs#L45
         let err = eigenda_data_source
-            .next(&block_info, Address::ZERO)
+            .next(&block_info, Address::ZERO, 0)
             .await
             .unwrap_err();
 
@@ -478,7 +483,7 @@ mod tests {
         source.eigenda_source.eigenda_fetcher.should_preimage_err = true;
         // see load_encoded_payload::HokuleaErrorKind::Temporary
         assert!(matches!(
-            source.next(&block_info, BATCHER_ADDRESS).await,
+            source.next(&block_info, BATCHER_ADDRESS, 0).await,
             Err(PipelineErrorKind::Temporary(PipelineError::Provider(_)))
         ));
 
@@ -502,7 +507,7 @@ mod tests {
         );
 
         let data = source
-            .next(&block_info, BATCHER_ADDRESS)
+            .next(&block_info, BATCHER_ADDRESS, 0)
             .await
             .expect("should be ok");
         assert!(source.altda_commitment.is_none());
@@ -531,7 +536,7 @@ mod tests {
 
         source.eigenda_source.eigenda_fetcher.should_preimage_err = true;
         assert!(matches!(
-            source.next(&block_info, BATCHER_ADDRESS).await,
+            source.next(&block_info, BATCHER_ADDRESS, 0).await,
             Err(PipelineErrorKind::Temporary(PipelineError::Provider(_)))
         ));
 
@@ -540,7 +545,7 @@ mod tests {
 
         // after last error, the op derivation pipeline would try again
         assert!(matches!(
-            source.next(&block_info, BATCHER_ADDRESS).await,
+            source.next(&block_info, BATCHER_ADDRESS, 0).await,
             Err(PipelineErrorKind::Temporary(PipelineError::Provider(_)))
         ));
 
@@ -551,7 +556,7 @@ mod tests {
         source.eigenda_source.eigenda_fetcher.should_preimage_err = false;
 
         let payload = source
-            .next(&block_info, BATCHER_ADDRESS)
+            .next(&block_info, BATCHER_ADDRESS, 0)
             .await
             .expect("should be ok");
 
@@ -579,7 +584,8 @@ mod tests {
         assert!(source
             .next(
                 &block_info,
-                alloy_primitives::address!("0x2f40d796917ffb642bd2e2bdd2c762a5e40fd749")
+                alloy_primitives::address!("0x2f40d796917ffb642bd2e2bdd2c762a5e40fd749"),
+                0,
             )
             .await
             .is_ok());
@@ -611,6 +617,7 @@ mod tests {
             .next(
                 &block_info,
                 alloy_primitives::address!("0x6AD3463563C8ad4bd42906FaD8aF00c9Ae509Ce5"),
+                0,
             )
             .await
             .unwrap_err();
@@ -646,7 +653,8 @@ mod tests {
             source
                 .next(
                     &block_info,
-                    alloy_primitives::address!("0xD1a823bF5c7DB22A2dA0cB9Cef9330930805a472")
+                    alloy_primitives::address!("0xD1a823bF5c7DB22A2dA0cB9Cef9330930805a472"),
+                    0,
                 )
                 .await
                 .unwrap_err(),
@@ -669,7 +677,7 @@ mod tests {
         );
 
         source
-            .next(&block_info, BATCHER_ADDRESS)
+            .next(&block_info, BATCHER_ADDRESS, 0)
             .await
             .expect("should be ok");
         // just populate the first one out of total two altda commitment data
@@ -677,7 +685,7 @@ mod tests {
         // ethereum source should still have data
         assert!(source.ethereum_source.blob_source.open);
         source
-            .next(&block_info, BATCHER_ADDRESS)
+            .next(&block_info, BATCHER_ADDRESS, 0)
             .await
             .expect("should be ok");
         // should be empty unless a temporary error
@@ -688,7 +696,7 @@ mod tests {
         assert!(source.ethereum_source.blob_source.data.is_empty());
 
         // now we shuold get eof, because there isn't data anymore
-        let err = source.next(&block_info, BATCHER_ADDRESS).await.unwrap_err();
+        let err = source.next(&block_info, BATCHER_ADDRESS, 0).await.unwrap_err();
         assert!(matches!(
             err,
             PipelineErrorKind::Temporary(PipelineError::Eof)
@@ -735,7 +743,7 @@ mod tests {
 
             // all preimage provider error are temporary
             assert!(matches!(
-                source.next(&block_info, BATCHER_ADDRESS).await.unwrap_err(),
+                source.next(&block_info, BATCHER_ADDRESS, 0).await.unwrap_err(),
                 PipelineErrorKind::Temporary(PipelineError::Provider(_)),
             ));
             // altda commitment should be used for the next time
@@ -780,7 +788,7 @@ mod tests {
         }
         // all data is discarded, drives until EOF
         assert!(matches!(
-            source.next(&block_info, BATCHER_ADDRESS).await.unwrap_err(),
+            source.next(&block_info, BATCHER_ADDRESS, 0).await.unwrap_err(),
             PipelineErrorKind::Temporary(PipelineError::Eof),
         ));
         // unlike temporary error, altda commitment is consumed
@@ -906,7 +914,7 @@ mod tests {
                 );
             }
             for i in 0..scenario.results.len() {
-                match source.next(&block_info, BATCHER_ADDRESS).await {
+                match source.next(&block_info, BATCHER_ADDRESS, 0).await {
                     Ok(payload) => assert_eq!(Ok(payload), scenario.results[i]),
                     Err(e) => assert_eq!(Err(e), scenario.results[i]),
                 }
@@ -979,7 +987,7 @@ mod tests {
             );
         }
         for i in 0..scenario.results.len() {
-            match source.next(&block_info, BATCHER_ADDRESS).await {
+            match source.next(&block_info, BATCHER_ADDRESS, 0).await {
                 Ok(payload) => assert_eq!(Ok(payload), scenario.results[i]),
                 Err(e) => assert_eq!(Err(e), scenario.results[i]),
             }
