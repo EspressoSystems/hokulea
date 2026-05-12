@@ -23,6 +23,7 @@ tracing.workspace = true
 kona-client.workspace = true
 kona-preimage.workspace = true
 kona-proof.workspace = true
+kona-genesis.workspace = true
 
 # Execution
 alloy-evm.workspace = true

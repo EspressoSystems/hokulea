@@ -12,8 +12,12 @@ alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 bincode.workspace = true
 
-alloy-rpc-client.workspace = true
-alloy-rpc-types.workspace = true
+# sp1-cc-host-executor (pinned to reth-1.9.3-sp1-6.1.0) uses the older
+# alloy v1.x API. Until succinctlabs/sp1-contract-call ships a release that
+# matches the reth rev used by kona-node/v1.5.0 (alloy v2.0.4), pin these
+# deps to v1 here rather than picking up the workspace's v2.0.4 versions.
+alloy-rpc-client = { version = "=1.6.3", default-features = false }
+alloy-rpc-types = { version = "=1.6.3", default-features = false }
 anyhow.workspace = true
 async-trait.workspace = true
 canoe-bindings.workspace = true

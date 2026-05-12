@@ -19,9 +19,13 @@ use kona_proof::{
 
 use kona_derive::EthereumDataSource;
 
-use alloy_evm::{EvmFactory, FromRecoveredTx, FromTxWithEncoded};
-use alloy_op_evm::block::OpTxEnv;
-use op_alloy_consensus::OpTxEnvelope;
+use alloy_evm::{block::BlockExecutorFactory, EvmFactory, FromRecoveredTx, FromTxWithEncoded};
+use alloy_op_evm::{
+    block::{OpAlloyReceiptBuilder, OpBlockExecutionCtx, OpTxEnv},
+    OpBlockExecutorFactory,
+};
+use kona_genesis::RollupConfig;
+use op_alloy_consensus::{OpReceiptEnvelope, OpTxEnvelope};
 use op_revm::OpSpecId;
 use revm::context::BlockEnv;
 
@@ -42,6 +46,12 @@ where
     <E as EigenDAPreimageProvider>::Error: Debug,
     <Evm as EvmFactory>::Tx:
         FromTxWithEncoded<OpTxEnvelope> + FromRecoveredTx<OpTxEnvelope> + OpTxEnv,
+    OpBlockExecutorFactory<OpAlloyReceiptBuilder, RollupConfig, Evm>: for<'b> BlockExecutorFactory<
+            EvmFactory = Evm,
+            ExecutionCtx<'b> = OpBlockExecutionCtx,
+            Transaction = OpTxEnvelope,
+            Receipt = OpReceiptEnvelope,
+        >,
 {
     ////////////////////////////////////////////////////////////////
     //                          PROLOGUE                          //
@@ -117,6 +127,7 @@ where
         dap,
         l1_provider.clone(),
         l2_provider.clone(),
+        None,
     )
     .await?;
 
