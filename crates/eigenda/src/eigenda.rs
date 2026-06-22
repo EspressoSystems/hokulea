@@ -17,7 +17,7 @@ use tracing::{error, warn};
 /// are cached. When next() is called it just returns the next cached encoded payload.
 /// Otherwise, EOF is sent if iterator is empty
 ///
-/// The L1 data source is generic over any [`DataAvailabilityProvider`] yielding [`Bytes`], so
+/// The ethereum_source field is generic over any [`DataAvailabilityProvider`] yielding [`Bytes`], so
 /// callers can supply kona's `EthereumDataSource` or a wrapper such as celo-kona's
 /// `CeloEthereumDataSource` (which adds Espresso event-based batch authentication).
 #[derive(Debug, Clone)]
