@@ -41,10 +41,7 @@ where
     A: EigenDAPreimageProvider + Send + Clone + Debug,
 {
     /// Instantiates a new [EigenDADataSource].
-    pub const fn new(
-        ethereum_source: D,
-        eigenda_source: EigenDAPreimageSource<A>,
-    ) -> Self {
+    pub const fn new(ethereum_source: D, eigenda_source: EigenDAPreimageSource<A>) -> Self {
         Self {
             ethereum_source,
             eigenda_source,
